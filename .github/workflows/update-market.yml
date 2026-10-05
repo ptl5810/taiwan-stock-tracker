@@ -18,13 +18,39 @@ jobs:
         run: |
           mkdir -p data
           python - <<'PY'
-          import json, urllib.request, datetime
+          import json, urllib.request, datetime, time
           url='https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
           req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'})
           with urllib.request.urlopen(req,timeout=60) as r:
               rows=json.load(r)
           if not rows: raise RuntimeError('TWSE returned no rows')
-          out={'updated_at':datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).isoformat(),'source':'TWSE STOCK_DAY_ALL','rows':rows}
+          # Volume ratio = latest trading-day volume / average volume of the prior 5 trading days.
+          # Fetch recent daily history for 4-digit listed stocks; fall back to 0 if history is unavailable.
+          today=datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+          yyyymmdd=today.strftime('%Y%m%d')
+          for i,row in enumerate(rows):
+              code=str(row.get('Code',''))
+              row['VolumeRatio']='0'
+              if not (len(code)==4 and code.isdigit()): continue
+              try:
+                  hurl=f'https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date={yyyymmdd}&stockNo={code}'
+                  hreq=urllib.request.Request(hurl,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'})
+                  with urllib.request.urlopen(hreq,timeout=20) as hr:
+                      hist=json.load(hr)
+                  data=hist.get('data') or []
+                  vols=[]
+                  for x in data:
+                      try: vols.append(float(str(x[1]).replace(',','')))
+                      except: pass
+                  current=float(str(row.get('TradeVolume','0')).replace(',','') or 0)
+                  prior=vols[:-1][-5:] if len(vols)>1 else []
+                  if prior and sum(prior)>0:
+                      row['VolumeRatio']=str(current/(sum(prior)/len(prior)))
+              except Exception:
+                  pass
+              if i%100==0: print('history',i,'/',len(rows))
+              time.sleep(0.03)
+          out={'updated_at':today.isoformat(),'source':'TWSE STOCK_DAY_ALL + STOCK_DAY','rows':rows}
           with open('data/market.json','w',encoding='utf-8') as fp:
               json.dump(out,fp,ensure_ascii=False,separators=(',',':'))
           print('rows',len(rows))
