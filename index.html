@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>台股選股追蹤</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;background:#08111f;color:#edf3ff}
+.wrap{max-width:760px;margin:auto;padding:18px 14px 90px}.hero{padding:16px 2px}.hero h1{font-size:27px;margin:0 0 6px}.muted{color:#94a3b8;font-size:13px}
+.card{background:#111c2e;border:1px solid #22304a;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 8px 30px #0003}
+h2{font-size:18px;margin:0 0 14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:12px;color:#a9b7cc;display:block;margin-bottom:5px}input,select{width:100%;background:#0a1424;color:#fff;border:1px solid #30415d;border-radius:11px;padding:12px;font-size:15px}
+button{border:0;border-radius:12px;padding:12px 14px;font-weight:700;font-size:15px;background:#2563eb;color:white}.secondary{background:#24334d}.danger{background:#7f1d1d}.row{display:flex;gap:8px;align-items:center}.row input{flex:1}
+.stock{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #26344b}.stock:last-child{border:0}.ticker{font-weight:800;font-size:17px}.name{color:#a8b5c8;font-size:13px}.up{color:#fb7185}.down{color:#5eead4}.tag{font-size:11px;background:#20304a;border-radius:999px;padding:4px 7px;color:#cbd5e1;display:inline-block;margin:4px 3px 0 0}
+.empty{text-align:center;color:#7f91ab;padding:18px 0}.tabs{position:fixed;bottom:0;left:0;right:0;background:#0c1728eF;backdrop-filter:blur(12px);border-top:1px solid #26344b;display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+.tabs button{background:transparent;color:#91a2ba;max-width:250px;width:50%;border-radius:0}.tabs button.active{color:#fff;border-top:2px solid #60a5fa}
+.hidden{display:none}.hint{font-size:12px;color:#8292aa;margin-top:9px}
+@media(max-width:430px){.grid{grid-template-columns:1fr 1fr}.wrap{padding-top:8px}}
+</style></head>
+<body><div class="wrap">
+<div class="hero"><h1>台股選股追蹤</h1><div class="muted">第一版｜條件篩選・自選追蹤・手機優先</div></div>
+<section id="screenFilter">
+<div class="card"><h2>選股條件</h2><div class="grid">
+<div><label>股價最低</label><input id="minPrice" type="number" placeholder="不限"></div>
+<div><label>股價最高</label><input id="maxPrice" type="number" placeholder="不限"></div>
+<div><label>單日漲幅 ≥ %</label><input id="minChange" type="number" step=".1" placeholder="例如 2"></div>
+<div><label>成交量 ≥ 張</label><input id="minVolume" type="number" placeholder="例如 1000"></div>
+<div><label>量比 ≥</label><input id="volumeRatio" type="number" step=".1" placeholder="例如 1.5"></div>
+<div><label>排序</label><select id="sort"><option value="change">漲幅</option><option value="volume">成交量</option><option value="price">股價</option></select></div>
+</div><div style="margin-top:12px" class="row"><button onclick="saveFilter()">儲存條件</button><button class="secondary" onclick="resetFilter()">清除</button></div>
+<div class="hint">目前先完成篩選介面與資料結構；下一階段接台股即時／盤後資料源後即可真正掃描全市場。</div></div>
+<div class="card"><h2>篩選結果</h2><div id="results" class="empty">尚未接入市場資料</div></div>
+</section>
+<section id="screenWatch" class="hidden">
+<div class="card"><h2>加入追蹤</h2><div class="row"><input id="symbol" inputmode="numeric" placeholder="股票代號，例如 6213"><button onclick="addStock()">加入</button></div></div>
+<div class="card"><h2>我的追蹤清單</h2><div id="watchlist"></div></div>
+</section>
+</div>
+<div class="tabs"><button id="tabFilter" class="active" onclick="showTab('filter')">選股</button><button id="tabWatch" onclick="showTab('watch')">追蹤</button></div>
+<script>
+const FIELDS=['minPrice','maxPrice','minChange','minVolume','volumeRatio','sort'];
+function saveFilter(){const x={};FIELDS.forEach(k=>x[k]=document.getElementById(k).value);localStorage.setItem('twFilter',JSON.stringify(x));alert('選股條件已儲存');}
+function loadFilter(){const x=JSON.parse(localStorage.getItem('twFilter')||'{}');FIELDS.forEach(k=>{if(x[k]!=null)document.getElementById(k).value=x[k]})}
+function resetFilter(){FIELDS.forEach(k=>document.getElementById(k).value='');document.getElementById('sort').value='change';localStorage.removeItem('twFilter')}
+function list(){return JSON.parse(localStorage.getItem('twWatch')||'[]')}
+function addStock(){const el=document.getElementById('symbol'),s=el.value.trim();if(!/^\d{4,6}$/.test(s)){alert('請輸入正確股票代號');return}let a=list();if(!a.includes(s))a.push(s);localStorage.setItem('twWatch',JSON.stringify(a));el.value='';render()}
+function removeStock(s){localStorage.setItem('twWatch',JSON.stringify(list().filter(x=>x!==s)));render()}
+function render(){const a=list(),el=document.getElementById('watchlist');if(!a.length){el.innerHTML='<div class="empty">尚未加入股票</div>';return}el.innerHTML=a.map(s=>'<div class="stock"><div><div class="ticker">'+s+'</div><div class="name">等待市場資料</div><span class="tag">追蹤中</span></div><button class="danger" onclick="removeStock(\''+s+'\')">刪除</button></div>').join('')}
+function showTab(t){document.getElementById('screenFilter').classList.toggle('hidden',t!=='filter');document.getElementById('screenWatch').classList.toggle('hidden',t!=='watch');document.getElementById('tabFilter').classList.toggle('active',t==='filter');document.getElementById('tabWatch').classList.toggle('active',t==='watch')}
+loadFilter();render();
+</script></body></html>
